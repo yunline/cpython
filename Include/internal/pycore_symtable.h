@@ -76,6 +76,7 @@ typedef struct _symtable_entry {
     unsigned ste_needs_classdict : 1; /* for class scopes, true if a closure
                                          over the class dict should be created */
     unsigned ste_comp_inlined : 1; /* true if this comprehension is inlined */
+    unsigned ste_comp_with_yield : 1; /* true if yield is used inside this comprehension */
     unsigned ste_comp_iter_target : 1; /* true if visiting comprehension target */
     unsigned ste_can_see_class_scope : 1; /* true if this block can see names bound in an
                                              enclosing class scope */

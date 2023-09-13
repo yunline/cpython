@@ -125,6 +125,7 @@ ste_new(struct symtable *st, identifier name, _Py_block_ty block,
     ste->ste_returns_value = 0;
     ste->ste_needs_class_closure = 0;
     ste->ste_comp_inlined = 0;
+    ste->ste_comp_with_yield = 0;
     ste->ste_comp_iter_target = 0;
     ste->ste_can_see_class_scope = 0;
     ste->ste_comp_iter_expr = 0;
@@ -1042,6 +1043,14 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
             goto error;
         }
         if (inline_comp) {
+            if (entry->ste_comp_with_yield) {
+                if(ste->ste_comprehension) {
+                    ste->ste_comp_with_yield = 1;
+                }
+                else {
+                    ste->ste_generator = 1;
+                }
+            }
             if (!inline_comprehension(ste, entry, scopes, child_free, inlined_cells)) {
                 Py_DECREF(child_free);
                 goto error;
@@ -2060,9 +2069,14 @@ symtable_visit_expr(struct symtable *st, expr_ty e)
         }
         if (e->v.Yield.value)
             VISIT(st, expr, e->v.Yield.value);
-        st->st_cur->ste_generator = 1;
-        if (st->st_cur->ste_comprehension) {
+        if (st->st_cur->ste_comprehension == GeneratorExpression){
             return symtable_raise_if_comprehension_block(st, e);
+        }
+        if (st->st_cur->ste_comprehension) {
+            st->st_cur->ste_comp_with_yield = 1;
+        }
+        else{
+            st->st_cur->ste_generator = 1;
         }
         break;
     case YieldFrom_kind:
@@ -2070,9 +2084,14 @@ symtable_visit_expr(struct symtable *st, expr_ty e)
             VISIT_QUIT(st, 0);
         }
         VISIT(st, expr, e->v.YieldFrom.value);
-        st->st_cur->ste_generator = 1;
-        if (st->st_cur->ste_comprehension) {
+        if (st->st_cur->ste_comprehension == GeneratorExpression){
             return symtable_raise_if_comprehension_block(st, e);
+        }
+        if (st->st_cur->ste_comprehension) {
+            st->st_cur->ste_comp_with_yield = 1;
+        }
+        else{
+            st->st_cur->ste_generator = 1;
         }
         break;
     case Await_kind:
@@ -2577,11 +2596,7 @@ symtable_raise_if_annotation_block(struct symtable *st, const char *name, expr_t
 static int
 symtable_raise_if_comprehension_block(struct symtable *st, expr_ty e) {
     _Py_comprehension_ty type = st->st_cur->ste_comprehension;
-    PyErr_SetString(PyExc_SyntaxError,
-            (type == ListComprehension) ? "'yield' inside list comprehension" :
-            (type == SetComprehension) ? "'yield' inside set comprehension" :
-            (type == DictComprehension) ? "'yield' inside dict comprehension" :
-            "'yield' inside generator expression");
+    PyErr_SetString(PyExc_SyntaxError, "'yield' inside generator expression");
     PyErr_RangedSyntaxLocationObject(st->st_filename,
                                      e->lineno, e->col_offset + 1,
                                      e->end_lineno, e->end_col_offset + 1);
